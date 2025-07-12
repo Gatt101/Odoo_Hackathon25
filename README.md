@@ -54,3 +54,5 @@ The goal of **StackIt** is to provide a minimal yet powerful platform for users 
 - Clicking the icon shows a dropdown with recent updates.
 
 ---
+### Video Link 
+https://drive.google.com/drive/folders/1X2vIex_8jAZWDkA5uVpqPgQt2YO-bWwK?usp=sharing
