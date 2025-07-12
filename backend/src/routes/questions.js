@@ -1,6 +1,7 @@
 const express = require('express');
 const { auth, ownerOrAdminAuth } = require('../middleware/auth');
 const { createQuestionSchema, updateQuestionSchema, questionQuerySchema } = require('../validation/questionValidation');
+const { createAnswerSchema } = require('../validation/answerValidation');
 const { sanitizeContent, extractImageUrls } = require('../utils/sanitizer');
 const prisma = require('../lib/prisma');
 
@@ -198,10 +199,10 @@ router.get('/:id', async (req, res) => {
               }
             }
           },
-          orderBy: {
-            isAccepted: 'desc',
-            createdAt: 'asc'
-          }
+          orderBy: [
+            { isAccepted: 'desc' },
+            { createdAt: 'asc' }
+          ]
         },
         comments: {
           include: {
@@ -308,6 +309,137 @@ router.delete('/:id', ownerOrAdminAuth, async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
     res.status(500).json({ error: 'Failed to delete question' });
+  }
+});
+
+// POST /api/questions/:id/answers - Add answer (only authenticated users, one per user per question)
+router.post('/:id/answers', auth, async (req, res) => {
+  try {
+    const { id: questionId } = req.params;
+
+    // Validate request body
+    const { error, value } = createAnswerSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({ error: error.details[0].message });
+    }
+
+    const { content } = value;
+
+    // Check if question exists
+    const question = await prisma.question.findUnique({
+      where: { id: questionId }
+    });
+
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    // Check if user has already answered this question
+    const existingAnswer = await prisma.answer.findFirst({
+      where: {
+        questionId: questionId,
+        authorId: req.user.id
+      }
+    });
+
+    if (existingAnswer) {
+      return res.status(400).json({ error: 'You have already answered this question. You can edit your existing answer instead.' });
+    }
+
+    // Sanitize the content to prevent XSS
+    const sanitizedContent = sanitizeContent(content);
+
+    // Create the answer
+    const answer = await prisma.answer.create({
+      data: {
+        content: sanitizedContent,
+        questionId: questionId,
+        authorId: req.user.id
+      },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true
+          }
+        },
+        _count: {
+          select: {
+            comments: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json({
+      message: 'Answer created successfully',
+      answer
+    });
+  } catch (error) {
+    console.error('Error creating answer:', error);
+    res.status(500).json({ error: 'Failed to create answer' });
+  }
+});
+
+// GET /api/questions/:id/answers - List all answers for a question
+router.get('/:id/answers', async (req, res) => {
+  try {
+    const { id: questionId } = req.params;
+
+    // Check if question exists
+    const question = await prisma.question.findUnique({
+      where: { id: questionId }
+    });
+
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    // Get all answers for the question
+    const answers = await prisma.answer.findMany({
+      where: { questionId: questionId },
+      include: {
+        author: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true
+          }
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                username: true,
+                avatar: true
+              }
+            }
+          },
+          orderBy: {
+            createdAt: 'asc'
+          }
+        },
+        _count: {
+          select: {
+            comments: true
+          }
+        }
+      },
+      orderBy: [
+        { isAccepted: 'desc' },
+        { createdAt: 'asc' }
+      ]
+    });
+
+    res.json({
+      answers,
+      totalCount: answers.length
+    });
+  } catch (error) {
+    console.error('Error fetching answers:', error);
+    res.status(500).json({ error: 'Failed to fetch answers' });
   }
 });
 

@@ -7,6 +7,7 @@ require('dotenv').config();
 const authRoutes = require('./routes/auth');
 const questionRoutes = require('./routes/questions');
 const userRoutes = require('./routes/users');
+const answerRoutes = require('./routes/answers');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -36,6 +37,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/auth', authRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/answers', answerRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

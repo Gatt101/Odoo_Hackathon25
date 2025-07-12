@@ -60,6 +60,8 @@ model Answer {
   question Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
   comments Comment[]
 
+  // Unique constraint: one answer per user per question
+  @@unique([authorId, questionId])
   @@map("answers")
 }
 

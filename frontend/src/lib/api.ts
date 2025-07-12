@@ -71,4 +71,42 @@ export async function getUsers(params = "") {
 export async function getUserById(id: string) {
   const res = await fetch(`${BASE_URL}/users/${id}`);
   return res.json();
+}
+
+// Answer APIs
+export async function createAnswer(questionId: string, content: string) {
+  const res = await fetch(`${BASE_URL}/questions/${questionId}/answers`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function getAnswers(questionId: string) {
+  const res = await fetch(`${BASE_URL}/questions/${questionId}/answers`);
+  return res.json();
+}
+
+export async function updateAnswer(answerId: string, content: string) {
+  const res = await fetch(`${BASE_URL}/answers/${answerId}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ content }),
+  });
+  return res.json();
+}
+
+export async function deleteAnswer(answerId: string) {
+  const res = await fetch(`${BASE_URL}/answers/${answerId}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  return res.json();
 } 
