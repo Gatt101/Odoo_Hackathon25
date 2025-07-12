@@ -204,19 +204,6 @@ export const QuestionsPage = () => {
                   onChange={(e) => handleSearchChange(e.target.value)}
                   className="bg-background/50"
                 />
-                
-                <Select value={sortBy} onValueChange={handleSortChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sort by..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sortOptions.map(option => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
 
                 <Select value={filterBy} onValueChange={handleFilterChange}>
                   <SelectTrigger>
@@ -256,7 +243,23 @@ export const QuestionsPage = () => {
               </div>
             </div>
 
-
+            {/* Popular Tags */}
+            <div className="space-y-3">
+              <h3 className="font-semibold">Popular Tags</h3>
+              <div className="flex flex-wrap gap-2">
+                {['javascript', 'react', 'typescript', 'node.js', 'python', 'css'].map(tag => (
+                  <Button
+                    key={tag}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSearchChange(tag)}
+                    className="text-xs"
+                  >
+                    {tag}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Main Content */}
