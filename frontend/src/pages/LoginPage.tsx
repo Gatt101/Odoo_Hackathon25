@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/shared';
 import { useToast } from '@/hooks/use-toast';
+import { login } from '../lib/api';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -20,16 +21,32 @@ export const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    // Mock login
-    setTimeout(() => {
+    try {
+      const res = await login(email, password);
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+        toast({
+          title: 'Welcome back!',
+          description: 'You have been successfully logged in.',
+        });
+        setIsLoading(false);
+        navigate('/profile');
+      } else {
+        toast({
+          title: 'Login failed',
+          description: res.error || 'Invalid email or password',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+      }
+    } catch (err) {
       toast({
-        title: "Welcome back!",
-        description: "You have been successfully logged in.",
+        title: 'Login failed',
+        description: 'Something went wrong. Please try again.',
+        variant: 'destructive',
       });
       setIsLoading(false);
-      navigate('/questions');
-    }, 1500);
+    }
   };
 
   return (
@@ -139,7 +156,7 @@ export const LoginPage = () => {
         <Card className="mt-4 glass-card">
           <CardContent className="pt-6">
             <p className="text-xs text-muted-foreground text-center">
-              <strong>Demo:</strong> Use any email and password to continue
+              <strong>Demo:</strong> Use your registered email and password to continue
             </p>
           </CardContent>
         </Card>

@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Header } from '@/components/shared';
 import { useToast } from '@/hooks/use-toast';
+import { register } from '../lib/api';
 
 export const RegisterPage = () => {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ export const RegisterPage = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const passwordRequirements = [
-    { label: 'At least 8 characters', met: formData.password.length >= 8 },
+    { label: 'At least 6 characters', met: formData.password.length >= 6 },
     { label: 'Contains uppercase letter', met: /[A-Z]/.test(formData.password) },
     { label: 'Contains lowercase letter', met: /[a-z]/.test(formData.password) },
     { label: 'Contains number', met: /\d/.test(formData.password) }
@@ -38,7 +39,6 @@ export const RegisterPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!allRequirementsMet) {
       toast({
         title: "Please check your input",
@@ -47,18 +47,33 @@ export const RegisterPage = () => {
       });
       return;
     }
-
     setIsLoading(true);
-
-    // Mock registration
-    setTimeout(() => {
+    try {
+      const res = await register(formData.username, formData.email, formData.password);
+      if (res.token) {
+        localStorage.setItem('token', res.token);
+        toast({
+          title: "Account created successfully!",
+          description: "Welcome to StackIt! You can now start asking and answering questions.",
+        });
+        setIsLoading(false);
+        navigate('/profile');
+      } else {
+        toast({
+          title: "Registration failed",
+          description: res.error || "Could not register. Please try again.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+      }
+    } catch (err) {
       toast({
-        title: "Account created successfully!",
-        description: "Welcome to StackIt! You can now start asking and answering questions.",
+        title: "Registration failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive"
       });
       setIsLoading(false);
-      navigate('/questions');
-    }, 1500);
+    }
   };
 
   return (
@@ -76,9 +91,9 @@ export const RegisterPage = () => {
 
         <Card className="glass-card">
           <CardHeader className="space-y-1 text-center">
-            <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
+            <CardTitle className="text-2xl font-bold">Create your account</CardTitle>
             <CardDescription>
-              Join our community of developers and get help with your coding questions
+              Sign up to join the community
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -92,7 +107,7 @@ export const RegisterPage = () => {
                     type="text"
                     value={formData.username}
                     onChange={(e) => handleInputChange('username', e.target.value)}
-                    placeholder="johndoe"
+                    placeholder="Choose a username"
                     className="pl-10"
                     required
                   />
@@ -108,7 +123,7 @@ export const RegisterPage = () => {
                     type="email"
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    placeholder="john@example.com"
+                    placeholder="you@example.com"
                     className="pl-10"
                     required
                   />
@@ -124,7 +139,7 @@ export const RegisterPage = () => {
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={(e) => handleInputChange('password', e.target.value)}
-                    placeholder="Create a strong password"
+                    placeholder="Create a password"
                     className="pl-10 pr-10"
                     required
                   />
@@ -138,20 +153,14 @@ export const RegisterPage = () => {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
-                
-                {/* Password Requirements */}
-                {formData.password && (
-                  <div className="space-y-1 mt-2">
-                    {passwordRequirements.map((req, index) => (
-                      <div key={index} className="flex items-center gap-2 text-xs">
-                        <Check className={`h-3 w-3 ${req.met ? 'text-success' : 'text-muted-foreground'}`} />
-                        <span className={req.met ? 'text-success' : 'text-muted-foreground'}>
-                          {req.label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-col gap-1 mt-2">
+                  {passwordRequirements.map((req, idx) => (
+                    <div key={idx} className="flex items-center text-xs">
+                      <Check className={`h-3 w-3 mr-1 ${req.met ? 'text-green-500' : 'text-gray-400'}`} />
+                      <span className={req.met ? 'text-green-600' : 'text-gray-500'}>{req.label}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -163,7 +172,7 @@ export const RegisterPage = () => {
                     type={showConfirmPassword ? 'text' : 'password'}
                     value={formData.confirmPassword}
                     onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                    placeholder="Confirm your password"
+                    placeholder="Re-enter your password"
                     className="pl-10 pr-10"
                     required
                   />
@@ -177,28 +186,22 @@ export const RegisterPage = () => {
                     {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
-                
-                {formData.confirmPassword && (
-                  <div className="flex items-center gap-2 text-xs">
-                    <Check className={`h-3 w-3 ${passwordsMatch ? 'text-success' : 'text-destructive'}`} />
-                    <span className={passwordsMatch ? 'text-success' : 'text-destructive'}>
-                      Passwords {passwordsMatch ? 'match' : 'do not match'}
-                    </span>
-                  </div>
+                {!passwordsMatch && formData.confirmPassword.length > 0 && (
+                  <div className="text-xs text-red-500 mt-1">Passwords do not match</div>
                 )}
               </div>
 
-              <Button 
-                type="submit" 
-                className="w-full" 
-                disabled={isLoading || !allRequirementsMet}
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isLoading}
                 variant="premium"
               >
                 {isLoading ? (
-                  'Creating account...'
+                  'Signing up...'
                 ) : (
                   <>
-                    Create Account
+                    Sign Up
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}
@@ -208,11 +211,11 @@ export const RegisterPage = () => {
             <div className="mt-6 text-center">
               <p className="text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <Link 
-                  to="/login" 
+                <Link
+                  to="/login"
                   className="text-primary hover:text-primary-glow font-medium transition-colors"
                 >
-                  Sign in
+                  Log in
                 </Link>
               </p>
             </div>
