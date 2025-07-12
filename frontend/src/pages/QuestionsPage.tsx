@@ -19,11 +19,11 @@ const transformApiQuestionToCardProps = (apiQuestion: any) => ({
     reputation: 0 // Placeholder - could be calculated from user's total votes
   },
   tags: apiQuestion.tags || [],
-  votes: 0, // Placeholder - votes would need to be implemented in the backend
+  votes: apiQuestion.totalVotes || 0, // Now using real vote counts from backend
   answers: apiQuestion._count?.answers || 0,
   views: 0, // Placeholder - views would need to be implemented in the backend
   createdAt: new Date(apiQuestion.createdAt),
-  hasAcceptedAnswer: false // Placeholder - would need to check if any answer has isAccepted: true
+  hasAcceptedAnswer: apiQuestion.hasAcceptedAnswer || false // Now using real accepted status
 });
 
 export const QuestionsPage = () => {

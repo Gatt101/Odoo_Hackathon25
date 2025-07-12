@@ -25,6 +25,7 @@ model User {
   questions Question[]
   answers   Answer[]
   comments  Comment[]
+  votes     Vote[]
 
   @@map("users")
 }
@@ -59,6 +60,7 @@ model Answer {
   author   User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
   question Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
   comments Comment[]
+  votes    Vote[]
 
   // Unique constraint: one answer per user per question
   @@unique([authorId, questionId])
@@ -82,8 +84,30 @@ model Comment {
   @@map("comments")
 }
 
+model Vote {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  type     VoteType // "up" or "down"
+  userId   String   @db.ObjectId
+  answerId String   @db.ObjectId
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answer Answer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+
+  // Unique constraint: one vote per user per answer
+  @@unique([userId, answerId])
+  @@map("votes")
+}
+
 enum Role {
   USER
   ADMIN
   MODERATOR
+}
+
+enum VoteType {
+  UP
+  DOWN
 } 

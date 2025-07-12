@@ -109,4 +109,24 @@ export async function deleteAnswer(answerId: string) {
     headers: { ...getAuthHeaders() },
   });
   return res.json();
+}
+
+export async function voteOnAnswer(answerId: string, type: "up" | "down") {
+  const res = await fetch(`${BASE_URL}/answers/${answerId}/vote`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ type }),
+  });
+  return res.json();
+}
+
+export async function acceptAnswer(answerId: string) {
+  const res = await fetch(`${BASE_URL}/answers/${answerId}/accept`, {
+    method: "POST",
+    headers: { ...getAuthHeaders() },
+  });
+  return res.json();
 } 

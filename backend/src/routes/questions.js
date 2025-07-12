@@ -110,6 +110,12 @@ router.get('/', async (req, res) => {
               avatar: true
             }
           },
+          answers: {
+            select: {
+              id: true,
+              isAccepted: true
+            }
+          },
           _count: {
             select: {
               answers: true,
@@ -121,10 +127,34 @@ router.get('/', async (req, res) => {
       prisma.question.count({ where })
     ]);
 
+    // Add vote counts and accepted answer status
+    const questionsWithVotes = await Promise.all(
+      questions.map(async (question) => {
+        // Calculate total votes for all answers of this question
+        let totalVotes = 0;
+        
+        for (const answer of question.answers) {
+          const voteCount = await getVoteCount(answer.id);
+          totalVotes += voteCount.total;
+        }
+        
+        // Check if any answer is accepted
+        const hasAcceptedAnswer = question.answers.some(answer => answer.isAccepted);
+        
+        return {
+          ...question,
+          totalVotes,
+          hasAcceptedAnswer,
+          // Remove detailed answers from the list view
+          answers: undefined
+        };
+      })
+    );
+
     const totalPages = Math.ceil(totalCount / limit);
 
     res.json({
-      questions,
+      questions: questionsWithVotes,
       pagination: {
         page,
         limit,
@@ -199,10 +229,7 @@ router.get('/:id', async (req, res) => {
               }
             }
           },
-          orderBy: [
-            { isAccepted: 'desc' },
-            { createdAt: 'asc' }
-          ]
+          // Will sort manually after adding vote counts
         },
         comments: {
           include: {
@@ -231,7 +258,38 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Question not found' });
     }
 
-    res.json({ question });
+    // Add vote counts to answers
+    const answersWithVotes = await Promise.all(
+      question.answers.map(async (answer) => {
+        const voteCount = await getVoteCount(answer.id);
+        return {
+          ...answer,
+          voteCount
+        };
+      })
+    );
+
+    // Sort answers: accepted first, then by vote count (highest first), then by creation date
+    const sortedAnswers = answersWithVotes.sort((a, b) => {
+      // First, prioritize accepted answers
+      if (a.isAccepted && !b.isAccepted) return -1;
+      if (!a.isAccepted && b.isAccepted) return 1;
+      
+      // Then sort by vote count (highest first)
+      const aVotes = a.voteCount?.total || 0;
+      const bVotes = b.voteCount?.total || 0;
+      if (aVotes !== bVotes) return bVotes - aVotes;
+      
+      // Finally, sort by creation date (newest first for tie-breaking)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    res.json({ 
+      question: {
+        ...question,
+        answers: sortedAnswers
+      }
+    });
   } catch (error) {
     console.error('Error fetching question:', error);
     res.status(500).json({ error: 'Failed to fetch question' });
@@ -372,9 +430,15 @@ router.post('/:id/answers', auth, async (req, res) => {
       }
     });
 
+    // Get vote count for the new answer (will be 0 initially)
+    const voteCount = await getVoteCount(answer.id);
+
     res.status(201).json({
       message: 'Answer created successfully',
-      answer
+      answer: {
+        ...answer,
+        voteCount
+      }
     });
   } catch (error) {
     console.error('Error creating answer:', error);
@@ -427,20 +491,63 @@ router.get('/:id/answers', async (req, res) => {
           }
         }
       },
-      orderBy: [
-        { isAccepted: 'desc' },
-        { createdAt: 'asc' }
-      ]
+      // Will sort manually after adding vote counts
+    });
+
+    // Add vote counts to answers
+    const answersWithVotes = await Promise.all(
+      answers.map(async (answer) => {
+        const voteCount = await getVoteCount(answer.id);
+        return {
+          ...answer,
+          voteCount
+        };
+      })
+    );
+
+    // Sort answers: accepted first, then by vote count (highest first), then by creation date
+    const sortedAnswers = answersWithVotes.sort((a, b) => {
+      // First, prioritize accepted answers
+      if (a.isAccepted && !b.isAccepted) return -1;
+      if (!a.isAccepted && b.isAccepted) return 1;
+      
+      // Then sort by vote count (highest first)
+      const aVotes = a.voteCount?.total || 0;
+      const bVotes = b.voteCount?.total || 0;
+      if (aVotes !== bVotes) return bVotes - aVotes;
+      
+      // Finally, sort by creation date (newest first for tie-breaking)
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
 
     res.json({
-      answers,
-      totalCount: answers.length
+      answers: sortedAnswers,
+      totalCount: sortedAnswers.length
     });
   } catch (error) {
     console.error('Error fetching answers:', error);
     res.status(500).json({ error: 'Failed to fetch answers' });
   }
 });
+
+// Helper function to get vote count for an answer
+async function getVoteCount(answerId) {
+  const votes = await prisma.vote.groupBy({
+    by: ['type'],
+    where: { answerId },
+    _count: {
+      type: true
+    }
+  });
+
+  const upVotes = votes.find(v => v.type === 'UP')?._count?.type || 0;
+  const downVotes = votes.find(v => v.type === 'DOWN')?._count?.type || 0;
+
+  return {
+    upVotes,
+    downVotes,
+    total: upVotes - downVotes
+  };
+}
 
 module.exports = router; 
