@@ -65,7 +65,7 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: error.details[0].message });
     }
 
-    const { page, limit, search, tags, sortBy, sortOrder } = value;
+    const { page, limit, search, tags, sortBy, sortOrder, filter } = value;
     const skip = (page - 1) * limit;
 
     // Build where clause for filtering
@@ -83,7 +83,7 @@ router.get('/', async (req, res) => {
       where.tags = { hasSome: tagArray };
     }
 
-    // Build orderBy clause
+    // Build orderBy clause (will be overridden for vote-based sorting)
     let orderBy = {};
     if (sortBy === 'answers') {
       orderBy = {
@@ -91,6 +91,9 @@ router.get('/', async (req, res) => {
           _count: sortOrder
         }
       };
+    } else if (sortBy === 'votes') {
+      // Vote sorting will be handled after data retrieval
+      orderBy = { createdAt: 'desc' }; // Default fallback
     } else {
       orderBy[sortBy] = sortOrder;
     }
@@ -140,25 +143,58 @@ router.get('/', async (req, res) => {
         
         // Check if any answer is accepted
         const hasAcceptedAnswer = question.answers.some(answer => answer.isAccepted);
+        const answerCount = question._count.answers;
         
         return {
           ...question,
           totalVotes,
           hasAcceptedAnswer,
+          answerCount,
           // Remove detailed answers from the list view
           answers: undefined
         };
       })
     );
 
-    const totalPages = Math.ceil(totalCount / limit);
+    // Apply server-side filtering
+    let filteredQuestions = questionsWithVotes;
+    switch (filter) {
+      case 'answered':
+        filteredQuestions = questionsWithVotes.filter(q => q.answerCount > 0);
+        break;
+      case 'unanswered':
+        filteredQuestions = questionsWithVotes.filter(q => q.answerCount === 0);
+        break;
+      case 'accepted':
+        filteredQuestions = questionsWithVotes.filter(q => q.hasAcceptedAnswer);
+        break;
+      default:
+        // 'all' - no filtering
+        break;
+    }
+
+    // Apply vote-based sorting if needed
+    if (sortBy === 'votes') {
+      filteredQuestions.sort((a, b) => {
+        return sortOrder === 'desc' 
+          ? b.totalVotes - a.totalVotes 
+          : a.totalVotes - b.totalVotes;
+      });
+    }
+
+    // Update pagination counts based on filtered results
+    const filteredTotalCount = filteredQuestions.length;
+    const totalPages = Math.ceil(filteredTotalCount / limit);
+
+    // Apply pagination to filtered results
+    const paginatedQuestions = filteredQuestions.slice(skip, skip + limit);
 
     res.json({
-      questions: questionsWithVotes,
+      questions: paginatedQuestions,
       pagination: {
         page,
         limit,
-        totalCount,
+        totalCount: filteredTotalCount,
         totalPages,
         hasNext: page < totalPages,
         hasPrev: page > 1

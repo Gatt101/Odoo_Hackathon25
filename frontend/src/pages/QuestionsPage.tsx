@@ -81,11 +81,11 @@ export const QuestionsPage = () => {
           sortOrder = 'desc';
           break;
         case 'votes':
-          backendSortBy = 'createdAt'; // Placeholder - would need votes implementation
+          backendSortBy = 'votes'; // Now properly implemented
           sortOrder = 'desc';
           break;
         case 'views':
-          backendSortBy = 'createdAt'; // Placeholder - would need views implementation
+          backendSortBy = 'createdAt'; // Placeholder - views not implemented yet
           sortOrder = 'desc';
           break;
         case 'unanswered':
@@ -97,6 +97,9 @@ export const QuestionsPage = () => {
       params.append('sortBy', backendSortBy);
       params.append('sortOrder', sortOrder);
       
+      // Add filter parameter
+      params.append('filter', filterBy);
+      
       const response = await getQuestions(`?${params.toString()}`);
       
       if (response.error) {
@@ -106,22 +109,8 @@ export const QuestionsPage = () => {
       // Transform API data to match QuestionCard component interface
       const transformedQuestions = response.questions.map(transformApiQuestionToCardProps);
       
-      // Apply client-side filtering for options not supported by backend
-      let filteredQuestions = transformedQuestions;
-      
-      switch (filterBy) {
-        case 'answered':
-          filteredQuestions = transformedQuestions.filter(q => q.answers > 0);
-          break;
-        case 'unanswered':
-          filteredQuestions = transformedQuestions.filter(q => q.answers === 0);
-          break;
-        case 'accepted':
-          filteredQuestions = transformedQuestions.filter(q => q.hasAcceptedAnswer);
-          break;
-      }
-      
-      setQuestions(filteredQuestions);
+      // Server-side filtering is now handled by the backend
+      setQuestions(transformedQuestions);
       setTotalPages(response.pagination?.totalPages || 1);
       setTotalCount(response.pagination?.totalCount || 0);
     } catch (err) {
@@ -135,22 +124,13 @@ export const QuestionsPage = () => {
   // Fetch questions when component mounts or when dependencies change
   useEffect(() => {
     fetchQuestions();
-  }, [currentPage, sortBy, searchTerm]);
-
-  // Refetch when filter changes (client-side filtering)
-  useEffect(() => {
-    if (questions.length > 0) {
-      fetchQuestions();
-    }
-  }, [filterBy]);
+  }, [currentPage, sortBy, filterBy]);
 
   // Debounced search
   useEffect(() => {
     const timeoutId = setTimeout(() => {
-      if (searchTerm !== '') {
-        setCurrentPage(1);
-        fetchQuestions();
-      }
+      setCurrentPage(1);
+      fetchQuestions();
     }, 500);
 
     return () => clearTimeout(timeoutId);
@@ -276,23 +256,7 @@ export const QuestionsPage = () => {
               </div>
             </div>
 
-            {/* Popular Tags */}
-            <div className="space-y-3">
-              <h3 className="font-semibold">Popular Tags</h3>
-              <div className="flex flex-wrap gap-2">
-                {['javascript', 'react', 'typescript', 'node.js', 'python', 'css'].map(tag => (
-                  <Button
-                    key={tag}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSearchChange(tag)}
-                    className="text-xs"
-                  >
-                    {tag}
-                  </Button>
-                ))}
-              </div>
-            </div>
+
           </div>
 
           {/* Main Content */}

@@ -64,8 +64,9 @@ const questionQuerySchema = Joi.object({
   limit: Joi.number().integer().min(1).max(100).default(10),
   search: Joi.string().min(1).max(100).optional(),
   tags: Joi.string().optional(), // comma-separated tags
-  sortBy: Joi.string().valid('createdAt', 'title', 'answers').default('createdAt'),
-  sortOrder: Joi.string().valid('asc', 'desc').default('desc')
+  sortBy: Joi.string().valid('createdAt', 'updatedAt', 'title', 'answers', 'votes').default('createdAt'),
+  sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
+  filter: Joi.string().valid('all', 'answered', 'unanswered', 'accepted').default('all')
 });
 
 module.exports = {
