@@ -1,0 +1,2 @@
+StackIt - Minimal Q&A Forum
+Description: A simple Q&A platform for asking and answering questions, with rich text editing, voting, and notifications.
