@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { Header, TagInput } from '@/components/shared';
 import { useToast } from '@/hooks/use-toast';
+import { createQuestion } from '../lib/api';
 
 export const AskQuestionPage = () => {
   const navigate = useNavigate();
@@ -51,15 +52,31 @@ export const AskQuestionPage = () => {
 
     setIsSubmitting(true);
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const res = await createQuestion({ title, description: content, tags });
+      if (res && res.question) {
+        toast({
+          title: "Question posted successfully!",
+          description: "Your question has been published and is now visible to the community.",
+        });
+        setIsSubmitting(false);
+        navigate('/questions');
+      } else {
+        toast({
+          title: "Failed to post question",
+          description: res.error || "Something went wrong. Please try again.",
+          variant: "destructive"
+        });
+        setIsSubmitting(false);
+      }
+    } catch (err) {
       toast({
-        title: "Question posted successfully!",
-        description: "Your question has been published and is now visible to the community.",
+        title: "Failed to post question",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive"
       });
       setIsSubmitting(false);
-      navigate('/questions');
-    }, 1500);
+    }
   };
 
   const writingTips = [

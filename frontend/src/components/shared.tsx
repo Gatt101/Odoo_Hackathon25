@@ -269,7 +269,7 @@ export const TagInput: React.FC<TagInputProps> = ({
     } else {
       setFilteredSuggestions([]);
     }
-  }, [inputValue, suggestions, tags]);
+  }, [inputValue, tags]);
 
   const addTag = (tag: string) => {
     const trimmedTag = tag.trim().toLowerCase();

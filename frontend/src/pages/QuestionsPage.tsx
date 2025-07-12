@@ -1,95 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { Filter, TrendingUp, Clock, Users, Plus } from 'lucide-react';
+import { Header, QuestionCard } from '@/components/shared';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Header, QuestionCard } from '@/components/shared';
+import { getQuestions } from '@/lib/api';
+import { Filter, Loader2, Plus, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
-// Mock data
-const mockQuestions = [
-  {
-    id: '1',
-    title: 'How to implement authentication in React with JWT tokens?',
-    content: 'I\'m building a React application and need to implement user authentication using JWT tokens. What\'s the best approach for handling token storage, refresh tokens, and protecting routes?',
-    author: {
-      name: 'sarah_dev',
-      reputation: 1250
-    },
-    tags: ['react', 'javascript', 'authentication', 'jwt'],
-    votes: 15,
-    answers: 7,
-    views: 342,
-    createdAt: new Date('2024-01-10T10:30:00Z'),
-    hasAcceptedAnswer: true
+// Transform API response to match QuestionCard component interface
+const transformApiQuestionToCardProps = (apiQuestion: any) => ({
+  id: apiQuestion.id,
+  title: apiQuestion.title,
+  content: apiQuestion.description,
+  author: {
+    name: apiQuestion.author?.username || 'Unknown User',
+    avatar: apiQuestion.author?.avatar,
+    reputation: 0 // Placeholder - could be calculated from user's total votes
   },
-  {
-    id: '2',
-    title: 'Optimizing database queries for large datasets',
-    content: 'Working with a PostgreSQL database containing millions of records. Query performance is becoming an issue. What are the best practices for optimization?',
-    author: {
-      name: 'db_master',
-      reputation: 2850
-    },
-    tags: ['postgresql', 'database', 'performance', 'optimization'],
-    votes: 23,
-    answers: 12,
-    views: 567,
-    createdAt: new Date('2024-01-09T14:20:00Z'),
-    hasAcceptedAnswer: false
-  },
-  {
-    id: '3',
-    title: 'CSS Grid vs Flexbox: When to use which?',
-    content: 'I often get confused about when to use CSS Grid versus Flexbox for layouts. Can someone explain the key differences and provide practical examples?',
-    author: {
-      name: 'css_ninja',
-      reputation: 890
-    },
-    tags: ['css', 'flexbox', 'grid', 'layout'],
-    votes: 8,
-    answers: 5,
-    views: 234,
-    createdAt: new Date('2024-01-08T09:15:00Z'),
-    hasAcceptedAnswer: true
-  },
-  {
-    id: '4',
-    title: 'Understanding TypeScript generics with practical examples',
-    content: 'TypeScript generics seem powerful but I\'m struggling to understand when and how to use them effectively. Looking for clear, practical examples.',
-    author: {
-      name: 'type_enthusiast',
-      reputation: 1650
-    },
-    tags: ['typescript', 'generics', 'javascript'],
-    votes: 19,
-    answers: 9,
-    views: 445,
-    createdAt: new Date('2024-01-07T16:45:00Z'),
-    hasAcceptedAnswer: false
-  },
-  {
-    id: '5',
-    title: 'Implementing real-time features with WebSockets',
-    content: 'Need to add real-time notifications and live updates to my web application. What\'s the best approach using WebSockets, and are there any alternatives?',
-    author: {
-      name: 'realtime_dev',
-      reputation: 2100
-    },
-    tags: ['websockets', 'realtime', 'node.js', 'socket.io'],
-    votes: 12,
-    answers: 6,
-    views: 298,
-    createdAt: new Date('2024-01-06T11:30:00Z'),
-    hasAcceptedAnswer: false
-  }
-];
+  tags: apiQuestion.tags || [],
+  votes: 0, // Placeholder - votes would need to be implemented in the backend
+  answers: apiQuestion._count?.answers || 0,
+  views: 0, // Placeholder - views would need to be implemented in the backend
+  createdAt: new Date(apiQuestion.createdAt),
+  hasAcceptedAnswer: false // Placeholder - would need to check if any answer has isAccepted: true
+});
 
 export const QuestionsPage = () => {
-  const [questions, setQuestions] = useState(mockQuestions);
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState('newest');
   const [filterBy, setFilterBy] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
 
   const sortOptions = [
     { value: 'newest', label: 'Newest' },
@@ -106,52 +52,128 @@ export const QuestionsPage = () => {
     { value: 'accepted', label: 'Has Accepted Answer' }
   ];
 
-  const filteredAndSortedQuestions = React.useMemo(() => {
-    let filtered = [...questions];
-
-    // Apply search filter
-    if (searchTerm) {
-      filtered = filtered.filter(q => 
-        q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+  // Fetch questions from API
+  const fetchQuestions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Build query parameters
+      const params = new URLSearchParams();
+      params.append('page', currentPage.toString());
+      params.append('limit', '10');
+      
+      if (searchTerm) {
+        params.append('search', searchTerm);
+      }
+      
+      // Map frontend sort values to backend sort values
+      let backendSortBy = 'createdAt';
+      let sortOrder = 'desc';
+      
+      switch (sortBy) {
+        case 'newest':
+          backendSortBy = 'createdAt';
+          sortOrder = 'desc';
+          break;
+        case 'active':
+          backendSortBy = 'updatedAt';
+          sortOrder = 'desc';
+          break;
+        case 'votes':
+          backendSortBy = 'createdAt'; // Placeholder - would need votes implementation
+          sortOrder = 'desc';
+          break;
+        case 'views':
+          backendSortBy = 'createdAt'; // Placeholder - would need views implementation
+          sortOrder = 'desc';
+          break;
+        case 'unanswered':
+          backendSortBy = 'createdAt';
+          sortOrder = 'desc';
+          break;
+      }
+      
+      params.append('sortBy', backendSortBy);
+      params.append('sortOrder', sortOrder);
+      
+      const response = await getQuestions(`?${params.toString()}`);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      
+      // Transform API data to match QuestionCard component interface
+      const transformedQuestions = response.questions.map(transformApiQuestionToCardProps);
+      
+      // Apply client-side filtering for options not supported by backend
+      let filteredQuestions = transformedQuestions;
+      
+      switch (filterBy) {
+        case 'answered':
+          filteredQuestions = transformedQuestions.filter(q => q.answers > 0);
+          break;
+        case 'unanswered':
+          filteredQuestions = transformedQuestions.filter(q => q.answers === 0);
+          break;
+        case 'accepted':
+          filteredQuestions = transformedQuestions.filter(q => q.hasAcceptedAnswer);
+          break;
+      }
+      
+      setQuestions(filteredQuestions);
+      setTotalPages(response.pagination?.totalPages || 1);
+      setTotalCount(response.pagination?.totalCount || 0);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch questions');
+      console.error('Error fetching questions:', err);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Apply category filter
-    switch (filterBy) {
-      case 'answered':
-        filtered = filtered.filter(q => q.answers > 0);
-        break;
-      case 'unanswered':
-        filtered = filtered.filter(q => q.answers === 0);
-        break;
-      case 'accepted':
-        filtered = filtered.filter(q => q.hasAcceptedAnswer);
-        break;
+  // Fetch questions when component mounts or when dependencies change
+  useEffect(() => {
+    fetchQuestions();
+  }, [currentPage, sortBy, searchTerm]);
+
+  // Refetch when filter changes (client-side filtering)
+  useEffect(() => {
+    if (questions.length > 0) {
+      fetchQuestions();
     }
+  }, [filterBy]);
 
-    // Apply sorting
-    switch (sortBy) {
-      case 'votes':
-        filtered.sort((a, b) => b.votes - a.votes);
-        break;
-      case 'views':
-        filtered.sort((a, b) => b.views - a.views);
-        break;
-      case 'active':
-        // For demo, just use creation date
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        break;
-      case 'unanswered':
-        filtered = filtered.filter(q => q.answers === 0).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        break;
-      default: // newest
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    }
+  // Debounced search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm !== '') {
+        setCurrentPage(1);
+        fetchQuestions();
+      }
+    }, 500);
 
-    return filtered;
-  }, [questions, sortBy, filterBy, searchTerm]);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleSortChange = (newSortBy: string) => {
+    setSortBy(newSortBy);
+    setCurrentPage(1);
+  };
+
+  const handleFilterChange = (newFilterBy: string) => {
+    setFilterBy(newFilterBy);
+    setCurrentPage(1);
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -163,7 +185,7 @@ export const QuestionsPage = () => {
           <div>
             <h1 className="text-3xl font-bold gradient-text mb-2">All Questions</h1>
             <p className="text-muted-foreground">
-              {filteredAndSortedQuestions.length} questions found
+              {loading ? 'Loading...' : `${totalCount} questions found`}
             </p>
           </div>
           
@@ -176,6 +198,15 @@ export const QuestionsPage = () => {
             </Button>
           </div>
         </div>
+
+        {/* Error Alert */}
+        {error && (
+          <Alert className="mb-6 border-destructive/50 text-destructive">
+            <AlertDescription>
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar */}
@@ -190,11 +221,11 @@ export const QuestionsPage = () => {
                 <Input
                   placeholder="Search questions..."
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={(e) => handleSearchChange(e.target.value)}
                   className="bg-background/50"
                 />
                 
-                <Select value={sortBy} onValueChange={setSortBy}>
+                <Select value={sortBy} onValueChange={handleSortChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Sort by..." />
                   </SelectTrigger>
@@ -207,7 +238,7 @@ export const QuestionsPage = () => {
                   </SelectContent>
                 </Select>
 
-                <Select value={filterBy} onValueChange={setFilterBy}>
+                <Select value={filterBy} onValueChange={handleFilterChange}>
                   <SelectTrigger>
                     <SelectValue placeholder="Filter by..." />
                   </SelectTrigger>
@@ -228,19 +259,19 @@ export const QuestionsPage = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Questions</span>
-                  <span className="font-medium">1,234</span>
+                  <span className="font-medium">{totalCount}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Answers</span>
-                  <span className="font-medium">3,456</span>
+                  <span className="font-medium">-</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Users</span>
-                  <span className="font-medium">567</span>
+                  <span className="font-medium">-</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Tags</span>
-                  <span className="font-medium">89</span>
+                  <span className="font-medium">-</span>
                 </div>
               </div>
             </div>
@@ -254,7 +285,7 @@ export const QuestionsPage = () => {
                     key={tag}
                     variant="outline"
                     size="sm"
-                    onClick={() => setSearchTerm(tag)}
+                    onClick={() => handleSearchChange(tag)}
                     className="text-xs"
                   >
                     {tag}
@@ -273,7 +304,7 @@ export const QuestionsPage = () => {
                   key={option.value}
                   variant={sortBy === option.value ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setSortBy(option.value)}
+                  onClick={() => handleSortChange(option.value)}
                   className="whitespace-nowrap"
                 >
                   {option.label}
@@ -281,40 +312,76 @@ export const QuestionsPage = () => {
               ))}
             </div>
 
-            {/* Questions List */}
-            <div className="space-y-4">
-              {filteredAndSortedQuestions.length > 0 ? (
-                filteredAndSortedQuestions.map(question => (
-                  <QuestionCard key={question.id} {...question} />
-                ))
-              ) : (
-                <div className="text-center py-12">
-                  <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
-                    <Users className="h-12 w-12 text-muted-foreground" />
-                  </div>
-                  <h3 className="text-lg font-semibold mb-2">No questions found</h3>
-                  <p className="text-muted-foreground mb-4">
-                    {searchTerm || filterBy !== 'all' 
-                      ? 'Try adjusting your search or filters.' 
-                      : 'Be the first to ask a question!'
-                    }
-                  </p>
-                  <Button asChild variant="default">
-                    <Link to="/ask">Ask the First Question</Link>
-                  </Button>
-                </div>
-              )}
-            </div>
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="ml-2 text-muted-foreground">Loading questions...</span>
+              </div>
+            )}
 
-            {/* Pagination (placeholder) */}
-            {filteredAndSortedQuestions.length > 0 && (
+            {/* Questions List */}
+            {!loading && (
+              <div className="space-y-4">
+                {questions.length > 0 ? (
+                  questions.map((question: any) => (
+                    <QuestionCard key={question.id} {...question} />
+                  ))
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="mx-auto w-24 h-24 bg-muted rounded-full flex items-center justify-center mb-4">
+                      <Users className="h-12 w-12 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No questions found</h3>
+                    <p className="text-muted-foreground mb-4">
+                      {searchTerm || filterBy !== 'all' 
+                        ? 'Try adjusting your search or filters.' 
+                        : 'Be the first to ask a question!'
+                      }
+                    </p>
+                    <Button asChild variant="default">
+                      <Link to="/ask">Ask the First Question</Link>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pagination */}
+            {!loading && questions.length > 0 && totalPages > 1 && (
               <div className="flex justify-center mt-8">
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" disabled>Previous</Button>
-                  <Button variant="default" size="sm">1</Button>
-                  <Button variant="outline" size="sm">2</Button>
-                  <Button variant="outline" size="sm">3</Button>
-                  <Button variant="outline" size="sm">Next</Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                  >
+                    Previous
+                  </Button>
+                  
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = i + 1;
+                    return (
+                      <Button
+                        key={pageNum}
+                        variant={currentPage === pageNum ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handlePageChange(pageNum)}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={currentPage === totalPages}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
             )}
