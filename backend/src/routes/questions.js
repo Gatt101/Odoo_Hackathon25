@@ -7,6 +7,26 @@ const prisma = require('../lib/prisma');
 
 const router = express.Router();
 
+// Middleware to check if user is the question owner
+const questionOwnerAuth = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const question = await prisma.question.findUnique({
+      where: { id },
+      select: { authorId: true }
+    });
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found.' });
+    }
+    if (req.user.id !== question.authorId) {
+      return res.status(403).json({ error: 'Access denied. Only the post owner can delete this post.' });
+    }
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Authentication failed.' });
+  }
+};
+
 // POST /api/questions - Create a new question
 router.post('/', auth, async (req, res) => {
   try {
@@ -386,8 +406,8 @@ router.put('/:id', ownerOrAdminAuth, async (req, res) => {
   }
 });
 
-// DELETE /api/questions/:id - Delete a question (owner or admin only)
-router.delete('/:id', ownerOrAdminAuth, async (req, res) => {
+// DELETE /api/questions/:id - Delete a question (owner only)
+router.delete('/:id', auth, questionOwnerAuth, async (req, res) => {
   try {
     const { id } = req.params;
 

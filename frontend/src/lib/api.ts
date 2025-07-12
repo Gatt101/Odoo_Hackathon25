@@ -60,6 +60,14 @@ export async function createQuestion(data: any) {
   return res.json();
 }
 
+export async function deleteQuestion(questionId: string) {
+  const res = await fetch(`${BASE_URL}/questions/${questionId}`, {
+    method: "DELETE",
+    headers: { ...getAuthHeaders() },
+  });
+  return res.json();
+}
+
 // Users APIs
 export async function getUsers(params = "") {
   const res = await fetch(`${BASE_URL}/users${params}`, {

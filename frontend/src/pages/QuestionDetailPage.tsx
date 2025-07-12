@@ -5,21 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { acceptAnswer, createAnswer, getQuestionById, voteOnAnswer } from '@/lib/api';
+import { acceptAnswer, createAnswer, getQuestionById, voteOnAnswer, deleteQuestion, getProfile } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
 import { ArrowLeft, Bookmark, Clock, Crown, Eye, Flag, Loader2, Share, User } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 
 export const QuestionDetailPage = () => {
   const { id } = useParams();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [question, setQuestion] = useState<any>(null);
   const [answers, setAnswers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newAnswer, setNewAnswer] = useState('');
   const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Fetch question details
   useEffect(() => {
@@ -51,6 +53,17 @@ export const QuestionDetailPage = () => {
 
     fetchQuestion();
   }, [id]);
+
+  // Fetch current user profile
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res = await getProfile();
+        if (res.user) setCurrentUser(res.user);
+      } catch {}
+    }
+    fetchProfile();
+  }, []);
 
   const handleVote = async (type: 'up' | 'down', targetType: 'question' | 'answer', targetId?: string) => {
     if (targetType === 'answer' && targetId) {
@@ -144,6 +157,19 @@ export const QuestionDetailPage = () => {
       });
     } finally {
       setIsSubmittingAnswer(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id) return;
+    if (!window.confirm('Are you sure you want to delete this question? This action cannot be undone.')) return;
+    try {
+      const res = await deleteQuestion(id);
+      if (res.error) throw new Error(res.error);
+      toast({ title: 'Question deleted', description: 'Your question has been deleted.' });
+      navigate('/questions');
+    } catch (err) {
+      toast({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to delete question', variant: 'destructive' });
     }
   };
 
@@ -276,6 +302,11 @@ export const QuestionDetailPage = () => {
                         <Flag className="h-4 w-4 mr-1" />
                         Flag
                       </Button>
+                      {currentUser && question.author?.id === currentUser.id && (
+                        <Button variant="destructive" size="sm" onClick={handleDelete}>
+                          Delete
+                        </Button>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 text-sm">
